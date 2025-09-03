@@ -2,7 +2,7 @@ import requests
 import json
 import os
 
-DATABASE_URL = 'https://physics-benchmark-default-rtdb.firebaseio.com/'
+DATABASE_URL = 'YOUR DATABASE URL HERE'
 
 def safe_key(text):
     return text.replace('.', '_')

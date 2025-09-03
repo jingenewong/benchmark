@@ -1,7 +1,7 @@
 import requests
 import time
 
-BASE_URL = "https://b5b74dacaecf.ngrok-free.app"
+BASE_URL = "YOUR SERVER URL HERE"
 
 def run(models, prompts, titles, num_elems, num_repeats=1):
     payload = {
