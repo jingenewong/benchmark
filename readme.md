@@ -1,4 +1,4 @@
-# Physics Reasoning Benchmark
+# SciPro (Scientific Process) Arena
 
 ## Installation and API usage
 
