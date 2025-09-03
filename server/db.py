@@ -5,7 +5,7 @@ import os
 
 cred = credentials.Certificate("db_admin.json")
 firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://physics-benchmark-default-rtdb.firebaseio.com/'
+    'databaseURL': 'YOUR DATABASE URL HERE'
 })
 
 def safe_key(text):
