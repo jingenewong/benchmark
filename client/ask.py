@@ -670,7 +670,7 @@ def save_batch(size, attempts):
     return
 
 
-#ask_batch(1, 1, 10)
+#ask_batch(1, 0, 10)
 #print(status())
 #save_batch(1, 10)
 #cancel()

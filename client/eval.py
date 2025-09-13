@@ -4,6 +4,7 @@ import scipy
 import matplotlib.pyplot as plt
 import json
 from init import write_to_text, get_band_linear_params_d, get_band_quadratic_params_d, create_spectrum, cut_array, get_spectrum_params_a, get_spectrum_params_d, get_spectrum_params_extended_d
+from init import fit_FD, fit_L1, fit_L1_EDC, fit_Ln, fit_L1_restrained, find_vF, find_bbE, find_Dirac, find_SC_gap, find_1_phonon, find_2_phonons, find_3_phonons, find_doping_1, find_dopings_2, find_dopings_3
 from ask import get_A_titles, get_BCD_titles, get_E_titles
 from call_db import get_filename
 
@@ -70,6 +71,115 @@ def get_spectrum_SC_arrays(resolution):
     k_array, E_array, spectrum = create_spectrum(k_min, k_max, resolution, E_min_shifted, -E_min_shifted, round(resolution/2), 0)
 
     return E_array, k_array
+
+
+
+def get_solution_floats(solution_name):
+
+    with open(solution_name, "r") as file:
+        content = file.read()
+    solution = float(content)
+
+    return solution
+
+
+
+def get_solution_arrays(solution_name):
+
+    with open(solution_name, "r") as file:
+        content = file.read()
+    file.close()
+    
+    lines = content.strip().split('\n')
+    clean_lines = []
+
+    for line in lines:
+        if line.strip() and line[0].isdigit():
+            parts = line.split(None, 1)
+
+            if len(parts) > 1:
+                line = parts[1]
+        
+        line = line.replace('[', '').replace(']', '').replace('nan', '0')
+
+        if line.strip():
+            clean_lines.append(line)
+    
+    all_data = ' '.join(clean_lines)
+    numbers = all_data.split()
+    float_numbers = [float(num) for num in numbers]
+    solution_array = np.array(float_numbers)
+    solution_array = np.ndarray.flatten(solution_array)
+
+    return solution_array
+
+
+
+def read_array(array_name):
+
+    with open(array_name, "r") as file:
+        content = file.read()
+    file.close()
+    
+    lines = content.strip().split('\n')
+    clean_lines = []
+
+    for line in lines:
+        """ if line.strip() and line[0].isdigit():
+            parts = line.split(None, 1)
+
+            if len(parts) > 1:
+                line = parts[1] """
+        
+        line = line.replace('[', '').replace(']', '').replace('nan', '0')
+
+        if line.strip():
+            clean_lines.append(line)
+    
+    all_data = ' '.join(clean_lines)
+    numbers = all_data.split()
+    float_numbers = [float(num) for num in numbers]
+    read_array = np.array(float_numbers)
+    read_array = np.ndarray.flatten(read_array)
+
+    return read_array
+
+
+
+def read_spectrum(spectrum_name):
+
+    spectrum_arrays = []
+
+    with open(spectrum_name, 'r') as file:
+        for line in file:
+            if not line.strip():
+                continue
+            if line[0] == '{':
+                line = ''
+            
+            line = line.replace('[', '').replace(']', '')
+            line = line.replace('null', '0')
+            line = line.replace('nan', '0')
+            line = line.replace(' nan', ' 0 ')
+            line = line.replace(' nan ', ' 0 ')
+            line = line.replace('nan', ' 0 ')
+            parts = line.strip().split()
+            
+            if len(parts) > 1 and parts[0].isdigit():
+                numeric_data = ' '.join(parts[1:])
+            else:
+                numeric_data = ' '.join(parts)
+            
+            numeric_data = numeric_data.replace(',', ' ')
+            
+            try:
+                float_values = [float(val) for val in numeric_data.split() if val.replace('.', '', 1).isdigit()]
+                if float_values:
+                    spectrum_arrays.append(np.array(float_values))
+            except ValueError:
+                continue
+    
+    return np.array(spectrum_arrays)
 
 
 
@@ -332,6 +442,25 @@ def get_score_triple(ground_truth_array, response_array, sigma):
         invalid = 1
 
     return score_erf, score_gauss, score_lorentz, invalid
+
+
+
+def score_code_floats(solution, response, sigma):
+    score_erf, score_gauss, score_lorentz = get_score_single(solution, response, sigma)
+    return score_erf, score_gauss, score_lorentz
+
+
+
+def score_code_arrays(solution, response, sigma):
+
+    if len(solution) == 2:
+        score_erf, score_gauss, score_lorentz, invalid = get_score_duple(solution, response, sigma)
+    elif len(solution) == 3:
+        score_erf, score_gauss, score_lorentz, invalid = get_score_triple(solution, response, sigma)
+    else:
+        score_erf, score_gauss, score_lorentz, invalid = get_score_array(solution, response, sigma)
+
+    return score_erf, score_gauss, score_lorentz
 
 
 
@@ -779,7 +908,7 @@ def plot_doping_triple(response_array_full, doping_answer_1, doping_answer_2, do
 def plot_model_responses(model, size):
 
     E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
-    E_factor = 1; k_factor = 1; doping_factor = 1
+    E_factor = 1; k_factor = 1; doping_factor = 3
     E_conv *= E_factor; k_conv *= k_factor; doping_sigma *= doping_factor
 
     linear_band_params, k_int_range_linear = get_band_linear_params_d()
@@ -861,7 +990,15 @@ def plot_model_responses(model, size):
             solution_name = "Prompts_large/B1/B1_vF_S.txt"
             file_name = model + "_large" + f"-Q{int(Q_num)}{response_suffix}.png"
         
-        vF_sigma = vF_linear*np.sqrt(k_conv**2 + E_conv**2)
+        noise_level = int((Q_num - 6)*10)
+        spectrum_name = f"Spectra/B1_r{int(resolution_BCD)}_n{noise_level}"
+    
+        solution = get_solution_floats(solution_name)
+        spectrum = read_spectrum(spectrum_name + "_sp.txt")
+        k_array = read_array(spectrum_name + "_k.txt")[1:]
+        E_array = read_array(spectrum_name + "_E.txt")
+        
+        vF_sigma = vF_linear*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution, responses = get_response_floats(solution_name, response_name)
         E_array_cut, k_array = get_spectrum_arrays(resolution_BCD)
@@ -898,8 +1035,16 @@ def plot_model_responses(model, size):
         else:
             solution_name = "Prompts_large/B2/B2_vF_S.txt"
             file_name = model + "_large" + f"-Q{int(Q_num)}{response_suffix}.png"
+
+        noise_level = int((Q_num - 16)*10)
+        spectrum_name = f"Spectra/B2_r{int(resolution_BCD)}_n{noise_level}"
+    
+        solution = get_solution_floats(solution_name)
+        spectrum = read_spectrum(spectrum_name + "_sp.txt")
+        k_array = read_array(spectrum_name + "_k.txt")[1:]
+        E_array = read_array(spectrum_name + "_E.txt")
         
-        vF_sigma = vF_quadratic*np.sqrt(k_conv**2 + E_conv**2)
+        vF_sigma = vF_quadratic*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution, responses = get_response_floats(solution_name, response_name)
         E_array_cut, k_array = get_spectrum_arrays(resolution_BCD)
@@ -935,8 +1080,16 @@ def plot_model_responses(model, size):
         else:
             solution_name = "Prompts_large/B3/B3_vF_S.txt"
             file_name = model + "_large" + f"-Q{int(Q_num)}{response_suffix}.png"
+
+        noise_level = int((Q_num - 26)*10)
+        spectrum_name = f"Spectra/B3_r{int(resolution_BCD)}_n{noise_level}"
+    
+        solution = get_solution_floats(solution_name)
+        spectrum = read_spectrum(spectrum_name + "_sp.txt")
+        k_array = read_array(spectrum_name + "_k.txt")[1:]
+        E_array = read_array(spectrum_name + "_E.txt")
         
-        vF_sigma = vF_linear*np.sqrt(k_conv**2 + E_conv**2)
+        vF_sigma = vF_linear*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution, responses = get_response_floats(solution_name, response_name)
         E_array_cut, k_array = get_spectrum_arrays(resolution_BCD)
@@ -1121,7 +1274,7 @@ def plot_model_responses(model, size):
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution, responses = get_response_floats(solution_name, response_name)
         E_array_cut, k_array = get_spectrum_arrays_extended(resolution_BCD)
-        plot_histogram_E_single(responses, E_array_cut, solution, E_conv, file_name)
+        plot_histogram_E_single(responses, E_array_cut, solution, E_conv*3, file_name)
     
     for Q_num in range(106, 111):
         # Questions D2
@@ -1139,7 +1292,7 @@ def plot_model_responses(model, size):
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution_array, response_arrays = get_response_arrays(solution_name, response_name)
         E_array_cut, k_array = get_spectrum_arrays_extended(resolution_BCD)
-        plot_histogram_E_double(response_arrays, E_array_cut, solution_array[0], solution_array[1], E_conv, file_name)
+        plot_histogram_E_double(response_arrays, E_array_cut, solution_array[0], solution_array[1], E_conv*3, file_name)
     
     for Q_num in range(111, 116):
         # Questions D3
@@ -1157,7 +1310,7 @@ def plot_model_responses(model, size):
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution_array, response_arrays = get_response_arrays(solution_name, response_name)
         E_array_cut, k_array = get_spectrum_arrays_extended(resolution_BCD)
-        plot_histogram_E_triple(response_arrays, E_array_cut, solution_array[0], solution_array[1], solution_array[2], E_conv, file_name)
+        plot_histogram_E_triple(response_arrays, E_array_cut, solution_array[0], solution_array[1], solution_array[2], E_conv*3, file_name)
     
     for Q_num in range(116, 121):
         # Questions E1
@@ -1257,6 +1410,22 @@ def score_model_responses(model, size, model_name):
     vF_linear = np.abs(linear_band_params[0]); vF_quadratic = np.abs(quadratic_band_params[0])
 
     if size == 1:
+        resolution_A1 = 75
+        resolution_BCD = 100
+        resolution_E1 = 80
+        resolution_E234 = 110
+    elif size == 2:
+        resolution_A1 = 125
+        resolution_BCD = 200
+        resolution_E1 = 150
+        resolution_E234 = 220
+    else:
+        resolution_A1 = 250
+        resolution_BCD = 300
+        resolution_E1 = 250
+        resolution_E234 = 350
+
+    if size == 1:
         response_prefix = "Responses_small/"
         response_suffix = ""
     elif size == 2:
@@ -1315,8 +1484,17 @@ def score_model_responses(model, size, model_name):
             solution_name = "Prompts_med/B1/B1_vF_S.txt"
         else:
             solution_name = "Prompts_large/B1/B1_vF_S.txt"
+
+        noise_level = int((Q_num - 11)*10)
+        spectrum_name = f"Spectra/B1_r{int(resolution_BCD)}_n{noise_level}"
         
-        vF_sigma = vF_linear*np.sqrt(k_conv**2 + E_conv**2)
+        solution = get_solution_floats(solution_name)
+       
+        spectrum = read_spectrum(spectrum_name + "_sp.txt")
+        k_array = read_array(spectrum_name + "_k.txt")[1:]
+        E_array = read_array(spectrum_name + "_E.txt")
+        
+        vF_sigma = vF_linear*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution, responses = get_response_floats(solution_name, response_name)
         score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz = score_response_floats_all(solution_name, response_name, vF_sigma)
@@ -1356,8 +1534,16 @@ def score_model_responses(model, size, model_name):
             solution_name = "Prompts_med/B2/B2_vF_S.txt"
         else:
             solution_name = "Prompts_large/B2/B2_vF_S.txt"
+
+        noise_level = int((Q_num - 21)*10)
+        spectrum_name = f"Spectra/B2_r{int(resolution_BCD)}_n{noise_level}"
+    
+        solution = get_solution_floats(solution_name)
+        spectrum = read_spectrum(spectrum_name + "_sp.txt")
+        k_array = read_array(spectrum_name + "_k.txt")[1:]
+        E_array = read_array(spectrum_name + "_E.txt")
         
-        vF_sigma = vF_quadratic*np.sqrt(k_conv**2 + E_conv**2)
+        vF_sigma = vF_quadratic*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution, responses = get_response_floats(solution_name, response_name)
         score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz = score_response_floats_all(solution_name, response_name, vF_sigma)
@@ -1397,8 +1583,16 @@ def score_model_responses(model, size, model_name):
             solution_name = "Prompts_med/B3/B3_vF_S.txt"
         else:
             solution_name = "Prompts_large/B3/B3_vF_S.txt"
+
+        noise_level = int((Q_num - 31)*10)
+        spectrum_name = f"Spectra/B3_r{int(resolution_BCD)}_n{noise_level}"
+    
+        solution = get_solution_floats(solution_name)
+        spectrum = read_spectrum(spectrum_name + "_sp.txt")
+        k_array = read_array(spectrum_name + "_k.txt")[1:]
+        E_array = read_array(spectrum_name + "_E.txt")
         
-        vF_sigma = vF_linear*np.sqrt(k_conv**2 + E_conv**2)
+        vF_sigma = vF_linear*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution, responses = get_response_floats(solution_name, response_name)
         score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz = score_response_floats_all(solution_name, response_name, vF_sigma)
@@ -1601,7 +1795,7 @@ def score_model_responses(model, size, model_name):
         
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution, responses = get_response_floats(solution_name, response_name)
-        score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz = score_response_floats_all(solution_name, response_name, E_conv)
+        score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz = score_response_floats_all(solution_name, response_name, E_conv*3)
         all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
         all_std_erf[int(Q_num - 1)] = std_erf; all_std_gauss[int(Q_num - 1)] = std_gauss; all_std_lorentz[int(Q_num - 1)] = std_lorentz
         all_invalid[int(Q_num - 1)] = 0
@@ -1621,7 +1815,7 @@ def score_model_responses(model, size, model_name):
         
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution_array, response_arrays = get_response_arrays(solution_name, response_name)
-        score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz, invalid = score_response_arrays_all(solution_name, response_name, E_conv)
+        score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz, invalid = score_response_arrays_all(solution_name, response_name, E_conv*3)
         all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
         all_std_erf[int(Q_num - 1)] = std_erf; all_std_gauss[int(Q_num - 1)] = std_gauss; all_std_lorentz[int(Q_num - 1)] = std_lorentz
         all_invalid[int(Q_num - 1)] = invalid
@@ -1641,7 +1835,7 @@ def score_model_responses(model, size, model_name):
         
         response_name = response_prefix + model + f"-Q{int(Q_num)}{response_suffix}.jsonl"
         solution_array, response_arrays = get_response_arrays(solution_name, response_name)
-        score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz, invalid = score_response_arrays_all(solution_name, response_name, E_conv)
+        score_erf, score_gauss, score_lorentz, score_erf_all, score_gauss_all, score_lorentz_all, std_erf, std_gauss, std_lorentz, invalid = score_response_arrays_all(solution_name, response_name, E_conv*3)
         all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
         all_std_erf[int(Q_num - 1)] = std_erf; all_std_gauss[int(Q_num - 1)] = std_gauss; all_std_lorentz[int(Q_num - 1)] = std_lorentz
         all_invalid[int(Q_num - 1)] = invalid
@@ -2118,6 +2312,1369 @@ def score_model_responses(model, size, model_name):
 
 
 
+# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------- Score all questions (code) -----------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+def score_code_A1(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_A1 = 75
+    elif size == 2:
+        resolution_A1 = 125
+    else:
+        resolution_A1 = 250
+
+    noise_level = int((Q_num - 1)*20)
+    spectrum_name = f"Spectra/A1_r{int(resolution_A1)}_n{noise_level}"
+    
+    if size == 1:
+        solution_name = "Prompts_small/A1/A1_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/A1/A1_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/A1/A1_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_floats(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    response = fit_FD(E_array, k_array, spectrum)
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, E_conv)
+    plot_histogram_E_single([response], E_array, solution, E_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_A1(1, 1)
+#print(score_lorentz)
+
+
+
+def score_code_B1(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 6)*10)
+    spectrum_name = f"Spectra/B1_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B1/B1_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B1/B1_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/B1/B1_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = disp
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_dispersion_E([response], solution, E_array, k_array, k_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz, disp
+
+#score_erf, score_gauss, score_lorentz, disp = score_code_B1(1, 6)
+#print(score_lorentz)
+
+
+
+def score_code_B1_vF(size, Q_num, disp):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+    linear_band_params, k_int_range_linear = get_band_linear_params_d()
+    vF_linear = np.abs(linear_band_params[0])
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 6)*10)
+    spectrum_name = f"Spectra/B1_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B1/B1_vF_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num + 5)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B1/B1_vF_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num + 5)}.png"
+    else:
+        solution_name = "Prompts_large/B1/B1_vF_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num + 5)}.png"
+    
+    solution = get_solution_floats(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+    
+    vF_sigma = vF_linear*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
+    response = find_vF(disp, E_array, 1, 24.94)
+
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, vF_sigma)
+    axis_label = r'Fermi velocity (eV$\cdot\AA$)'
+    plot_histogram_general_single([response], solution, vF_sigma, 6, axis_label, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_B1_vF(1, 6, disp)
+#print(score_lorentz)
+
+
+
+def score_code_B2(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 16)*10)
+    spectrum_name = f"Spectra/B2_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B2/B2_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B2/B2_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/B2/B2_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = disp
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_dispersion_E([response], solution, E_array, k_array, k_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz, disp
+
+#score_erf, score_gauss, score_lorentz, disp = score_code_B2(1, 16)
+#print(score_lorentz)
+
+
+
+def score_code_B2_vF(size, Q_num, disp):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+    quadratic_band_params, k_int_range_quadratic = get_band_quadratic_params_d()
+    vF_quadratic = np.abs(quadratic_band_params[0])
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 16)*10)
+    spectrum_name = f"Spectra/B2_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B2/B2_vF_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num + 5)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B2/B2_vF_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num + 5)}.png"
+    else:
+        solution_name = "Prompts_large/B2/B2_vF_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num + 5)}.png"
+    
+    solution = get_solution_floats(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+    
+    vF_sigma = vF_quadratic*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
+    response = find_vF(disp, E_array, 2, 24.94)
+
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, vF_sigma)
+    axis_label = r'Fermi velocity (eV$\cdot\AA$)'
+    plot_histogram_general_single([response], solution, vF_sigma, 6, axis_label, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_B2_vF(1, 16, disp)
+#print(score_lorentz)
+
+
+
+def score_code_B3(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 26)*10)
+    spectrum_name = f"Spectra/B3_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B3/B3_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B3/B3_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/B3/B3_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    #disp = fit_Ln(E_array, k_array, spectrum, 0.05, 30)
+    disp = fit_L1_restrained(E_array, k_array, spectrum, 0.05, 50)
+    response = disp
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_dispersion_E([response], solution, E_array, k_array, k_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz, disp
+
+#score_erf, score_gauss, score_lorentz, disp = score_code_B3(1, 26)
+#print(score_lorentz)
+
+
+
+def score_code_B3_vF(size, Q_num, disp):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+    linear_band_params, k_int_range_linear = get_band_linear_params_d()
+    vF_linear = np.abs(linear_band_params[0])
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 26)*10)
+    spectrum_name = f"Spectra/B3_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B3/B3_vF_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num + 5)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B3/B3_vF_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num + 5)}.png"
+    else:
+        solution_name = "Prompts_large/B3/B3_vF_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num + 5)}.png"
+    
+    solution = get_solution_floats(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+    
+    vF_sigma = vF_linear*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array) - np.min(E_array))**2))
+    response = find_vF(disp, E_array, 1, 24.94)
+
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, vF_sigma)
+    axis_label = r'Fermi velocity (eV$\cdot\AA$)'
+    plot_histogram_general_single([response], solution, vF_sigma, 6, axis_label, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_B3_vF(1, 26, disp)
+#print(score_lorentz)
+
+
+
+def score_code_B4(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 36)*10)
+    spectrum_name = f"Spectra/B4_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B4/B4_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B4/B4_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/B4/B4_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)[1:]
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1_EDC(E_array, k_array, spectrum, 0.05)
+    response = disp
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_dispersion_k([response], solution, E_array, k_array, E_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz, disp
+
+#score_erf, score_gauss, score_lorentz, disp = score_code_B4(1, 36)
+#print(score_lorentz)
+
+
+
+def score_code_B4_bbE(size, Q_num, disp):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 36)*10)
+    spectrum_name = f"Spectra/B4_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B4/B4_bbE_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num + 5)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B4/B4_bbE_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num + 5)}.png"
+    else:
+        solution_name = "Prompts_large/B4/B4_bbE_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num + 5)}.png"
+    
+    solution = get_solution_floats(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+    
+    response = find_bbE(disp, k_array, E_array, 1.65, 2.35)
+
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, E_conv)
+    plot_histogram_E_single([response], E_array, solution, E_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_B4_bbE(1, 36, disp)
+#print(score_lorentz)
+
+
+
+def score_code_B5(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 46)*10)
+    spectrum_name = f"Spectra/B5_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B5/B5_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B5/B5_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/B5/B5_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    response = find_Dirac(E_array, k_array, spectrum, 24.95, 24.98, 0.05)
+
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, E_conv)
+    plot_histogram_E_single([response], E_array, solution, E_conv, file_name)
+
+    return score_erf[0], score_gauss[0], score_lorentz[0]
+
+#score_erf, score_gauss, score_lorentz = score_code_B5(1, 46)
+#print(score_lorentz)
+
+
+
+def score_code_B6(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 51)*10)
+    spectrum_name = f"Spectra/B6_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/B6/B6_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/B6/B6_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/B6/B6_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    response = find_SC_gap(E_array, k_array, spectrum, -0.25, -0.15)
+
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, E_conv)
+    E_lims = np.array([0, np.max(max(E_array))])
+    plot_histogram_E_single([response], E_lims, solution, E_conv, file_name)
+
+    return score_erf[0], score_gauss[0], score_lorentz[0]
+
+#score_erf, score_gauss, score_lorentz = score_code_B6(1, 51)
+#print(score_lorentz)
+
+
+
+def score_code_C1(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 56)*5)
+    spectrum_name = f"Spectra/C1_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/C1/C1_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/C1/C1_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/C1/C1_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = 2*gamma_array   # Multiply by two to get FWHM
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_linewidth([response], solution, E_array, k_array, k_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_C1(1, 56)
+#print(score_lorentz)
+
+
+
+def score_code_C2(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 61)*5)
+    spectrum_name = f"Spectra/C2_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/C2/C2_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/C2/C2_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/C2/C2_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = 2*gamma_array   # Multiply by two to get FWHM
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_linewidth([response], solution, E_array, k_array, k_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_C2(1, 61)
+#print(score_lorentz)
+
+
+
+def score_code_C3(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 66)*5)
+    spectrum_name = f"Spectra/C3_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/C3/C3_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/C3/C3_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/C3/C3_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = 2*gamma_array   # Multiply by two to get FWHM
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_linewidth([response], solution, E_array, k_array, k_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_C3(1, 67)
+#print(score_lorentz)
+
+
+
+def score_code_C4(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 71)*5)
+    spectrum_name = f"Spectra/C4_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/C4/C4_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/C4/C4_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/C4/C4_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = 2*gamma_array   # Multiply by two to get FWHM
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_linewidth([response], solution, E_array, k_array, k_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_C4(1, 71)
+#print(score_lorentz)
+
+
+
+def score_code_C5(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 76)*5)
+    spectrum_name = f"Spectra/C5_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/C5/C5_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/C5/C5_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/C5/C5_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = 2*gamma_array   # Multiply by two to get FWHM
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv)
+    plot_linewidth([response], solution, E_array, k_array, k_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_C5(1, 76)
+#print(score_lorentz)
+
+
+
+def score_code_D1(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    if Q_num in range(81, 86):
+        L = "_l05"
+    elif Q_num in range(86, 91):
+        L = "_l075"
+    elif Q_num in range(91, 96):
+        L = "_l10"
+    elif Q_num in range(96, 101):
+        L = "_l20"
+    else:
+        L = "_l50"
+
+    noise_level = int(((Q_num - 81)%5)*10)
+    spectrum_name = f"Spectra/D1_r{int(resolution_BCD)}_n{noise_level}" + L
+
+    if size == 1:
+        solution_name = "Prompts_small/D1/D1_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/D1/D1_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/D1/D1_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = find_1_phonon(gamma_array, E_array, 24.9, 24.975)
+
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, E_conv*3)
+    plot_histogram_E_single([response], E_array, solution, E_conv, file_name)
+
+    return score_erf[0], score_gauss[0], score_lorentz[0]
+
+#score_erf, score_gauss, score_lorentz = score_code_D1(1, 81)
+#print(score_lorentz)
+
+
+
+def score_code_D2(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 106)*10)
+    spectrum_name = f"Spectra/D2_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/D2/D2_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/D2/D2_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/D2/D2_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = find_2_phonons(gamma_array, E_array, 24.9, 24.94, 24.94, 24.975)
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv*3)
+    plot_histogram_E_double([response], E_array, solution[0], solution[1], E_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_D2(1, 105)
+#print(score_lorentz)
+
+
+
+def score_code_D3(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_BCD = 100
+    elif size == 2:
+        resolution_BCD = 200
+    else:
+        resolution_BCD = 300
+
+    noise_level = int((Q_num - 111)*10)
+    spectrum_name = f"Spectra/D3_r{int(resolution_BCD)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/D3/D3_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/D3/D3_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/D3/D3_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")
+    k_array = read_array(spectrum_name + "_k.txt")[1:]
+    E_array = read_array(spectrum_name + "_E.txt")
+
+    disp, gamma_array = fit_L1(E_array, k_array, spectrum, 0.05)
+    response = find_3_phonons(gamma_array, E_array, 24.85, 24.88, 24.88, 24.935, 24.935, 24.975)
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, E_conv*3)
+    plot_histogram_E_triple([response], E_array, solution[0], solution[1], solution[2], E_conv, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_D3(1, 111)
+#print(score_lorentz)
+
+
+
+def score_code_E1(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_E1 = 80
+    elif size == 2:
+        resolution_E1 = 150
+    else:
+        resolution_E1 = 250
+
+    noise_level = int((Q_num - 116)*10)
+    spectrum_name = f"Spectra/E1_r{int(resolution_E1)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/E1/E1_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/E1/E1_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/E1/E1_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_floats(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")[1:,:]
+    kx_array = read_array(spectrum_name + "_kx.txt")[1:]
+    ky_array = read_array(spectrum_name + "_ky.txt")[1:]
+
+    response = find_doping_1(kx_array, ky_array, spectrum)
+
+    score_erf, score_gauss, score_lorentz = score_code_floats(solution, response, doping_sigma)
+    plot_doping_single([response], solution, doping_sigma, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_E1(1, 116)
+#print(score_lorentz)
+
+
+
+def score_code_E2(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_E234 = 110
+    elif size == 2:
+        resolution_E234 = 220
+    else:
+        resolution_E234 = 350
+
+    noise_level = int((Q_num - 121)*10)
+    spectrum_name = f"Spectra/E2_r{int(resolution_E234)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/E2/E2_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/E2/E2_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/E2/E2_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")[1:,:]
+    kx_array = read_array(spectrum_name + "_kx.txt")[1:]
+    ky_array = read_array(spectrum_name + "_ky.txt")[1:]
+
+    response = find_dopings_2(kx_array, ky_array, spectrum)
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, doping_sigma)
+    plot_doping_double([response], solution[0], solution[1], doping_sigma, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_E2(1, 121)
+#print(score_lorentz)
+
+
+
+def score_code_E3(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_E234 = 110
+    elif size == 2:
+        resolution_E234 = 220
+    else:
+        resolution_E234 = 350
+
+    noise_level = int((Q_num - 126)*10)
+    spectrum_name = f"Spectra/E3_r{int(resolution_E234)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/E3/E3_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/E3/E3_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/E3/E3_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")[1:,:]
+    kx_array = read_array(spectrum_name + "_kx.txt")[1:]
+    ky_array = read_array(spectrum_name + "_ky.txt")[1:]
+
+    response = find_dopings_3(kx_array, ky_array, spectrum)
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, doping_sigma)
+    plot_doping_triple([response], solution[0], solution[1], solution[2], doping_sigma, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_E3(1, 125)
+#print(score_lorentz)
+
+
+
+def score_code_E4(size, Q_num):
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    if size == 1:
+        resolution_E234 = 110
+    elif size == 2:
+        resolution_E234 = 220
+    else:
+        resolution_E234 = 350
+
+    noise_level = int((Q_num - 131)*10)
+    spectrum_name = f"Spectra/E4_r{int(resolution_E234)}_n{noise_level}"
+
+    if size == 1:
+        solution_name = "Prompts_small/E4/E4_S.txt"
+        file_name = "Spectra_answers/Small" + f"-Q{int(Q_num)}.png"
+    elif size == 2:
+        solution_name = "Prompts_med/E4/E4_S.txt"
+        file_name = "Spectra_answers/Med" + f"-Q{int(Q_num)}.png"
+    else:
+        solution_name = "Prompts_large/E4/E4_S.txt"
+        file_name = "Spectra_answers/Large" + f"-Q{int(Q_num)}.png"
+    
+    solution = get_solution_arrays(solution_name)
+    spectrum = read_spectrum(spectrum_name + "_sp.txt")[1:,:]
+    kx_array = read_array(spectrum_name + "_kx.txt")[1:]
+    ky_array = read_array(spectrum_name + "_ky.txt")[1:]
+
+    response = find_dopings_3(kx_array, ky_array, spectrum)
+
+    score_erf, score_gauss, score_lorentz = score_code_arrays(solution, response, doping_sigma)
+    plot_doping_triple([response], solution[0], solution[1], solution[2], doping_sigma, file_name)
+
+    return score_erf, score_gauss, score_lorentz
+
+#score_erf, score_gauss, score_lorentz = score_code_E4(1, 131)
+#print(score_lorentz)
+
+
+
+def score_code_responses(size):
+
+    all_scores_erf = np.zeros(135); all_scores_gauss = np.zeros(135); all_scores_lorentz = np.zeros(135)
+    all_scores_erf.fill(np.nan); all_scores_gauss.fill(np.nan); all_scores_lorentz.fill(np.nan)
+
+    T1_scores = np.zeros(5); T2_scores = np.zeros(5); T3_scores = np.zeros(5)
+
+    E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
+
+    linear_band_params, k_int_range_linear = get_band_linear_params_d()
+    quadratic_band_params, k_int_range_quadratic = get_band_quadratic_params_d()
+    vF_linear = np.abs(linear_band_params[0]); vF_quadratic = np.abs(quadratic_band_params[0])
+
+    if size == 1:
+        resolution_A1 = 75
+        resolution_BCD = 100
+        resolution_E1 = 80
+        resolution_E234 = 110
+    elif size == 2:
+        resolution_A1 = 125
+        resolution_BCD = 200
+        resolution_E1 = 150
+        resolution_E234 = 220
+    else:
+        resolution_A1 = 250
+        resolution_BCD = 300
+        resolution_E1 = 250
+        resolution_E234 = 350
+
+    for Q_num in range(1, 6):
+        # Questions A1
+        score_erf, score_gauss, score_lorentz = score_code_A1(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T1_scores[(Q_num - 1)%5] += score_lorentz
+    print("A1 complete")
+    
+    for Q_num in range(6, 11):
+        # Questions B1
+        score_erf, score_gauss, score_lorentz, disp = score_code_B1(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+        
+        # Questions B1 (vF)
+        score_erf, score_gauss, score_lorentz = score_code_B1_vF(size, Q_num, disp)
+        all_scores_erf[int(Q_num + 4)] = score_erf; all_scores_gauss[int(Q_num + 4)] = score_gauss; all_scores_lorentz[int(Q_num + 4)] = score_lorentz
+        T3_scores[(Q_num + 4)%5] += score_lorentz
+    print("B1 complete")
+    
+    for Q_num in range(16, 21):
+        # Questions B2
+        score_erf, score_gauss, score_lorentz, disp = score_code_B2(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+        
+        # Questions B2 (vF)
+        score_erf, score_gauss, score_lorentz = score_code_B2_vF(size, Q_num, disp)
+        all_scores_erf[int(Q_num + 4)] = score_erf; all_scores_gauss[int(Q_num + 4)] = score_gauss; all_scores_lorentz[int(Q_num + 4)] = score_lorentz
+        T3_scores[(Q_num + 4)%5] += score_lorentz
+    print("B2 complete")
+    
+    for Q_num in range(26, 31):
+        # Questions B3
+        score_erf, score_gauss, score_lorentz, disp = score_code_B3(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+        
+        # Questions B3 (vF)
+        score_erf, score_gauss, score_lorentz = score_code_B3_vF(size, Q_num, disp)
+        all_scores_erf[int(Q_num + 4)] = score_erf; all_scores_gauss[int(Q_num + 4)] = score_gauss; all_scores_lorentz[int(Q_num + 4)] = score_lorentz
+        T3_scores[(Q_num + 4)%5] += score_lorentz
+    print("B3 complete")
+    
+    for Q_num in range(36, 41):
+        # Questions B4
+        score_erf, score_gauss, score_lorentz, disp = score_code_B4(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+        
+        # Questions B4 (bbE)
+        score_erf, score_gauss, score_lorentz = score_code_B4_bbE(size, Q_num, disp)
+        all_scores_erf[int(Q_num + 4)] = score_erf; all_scores_gauss[int(Q_num + 4)] = score_gauss; all_scores_lorentz[int(Q_num + 4)] = score_lorentz
+        T1_scores[(Q_num + 4)%5] += score_lorentz
+    print("B4 complete")
+    
+    for Q_num in range(46, 51):
+        # Questions B5
+        score_erf, score_gauss, score_lorentz = score_code_B5(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T1_scores[(Q_num - 1)%5] += score_lorentz
+    print("B5 complete")
+    
+    for Q_num in range(51, 56):
+        # Questions B6
+        score_erf, score_gauss, score_lorentz = score_code_B6(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T1_scores[(Q_num - 1)%5] += score_lorentz
+    print("B6 complete")
+    
+    for Q_num in range(56, 61):
+        # Questions C1
+        score_erf, score_gauss, score_lorentz = score_code_C1(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+    print("C1 complete")
+    
+    for Q_num in range(61, 66):
+        # Questions C2
+        score_erf, score_gauss, score_lorentz = score_code_C2(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+    print("C2 complete")
+    
+    for Q_num in range(66, 71):
+        # Questions C3
+        score_erf, score_gauss, score_lorentz = score_code_C3(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+    print("C3 complete")
+    
+    for Q_num in range(71, 76):
+        # Questions C4
+        score_erf, score_gauss, score_lorentz = score_code_C4(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+    print("C4 complete")
+    
+    for Q_num in range(76, 81):
+        # Questions C5
+        score_erf, score_gauss, score_lorentz = score_code_C5(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T2_scores[(Q_num - 1)%5] += score_lorentz
+    print("C5 complete")
+    
+    for Q_num in range(81, 106):
+        # Questions D1
+        score_erf, score_gauss, score_lorentz = score_code_D1(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T1_scores[(Q_num - 1)%5] += score_lorentz
+    print("D1 complete")
+    
+    for Q_num in range(106, 111):
+        # Questions D2
+        score_erf, score_gauss, score_lorentz = score_code_D2(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T1_scores[(Q_num - 1)%5] += score_lorentz
+    print("D2 complete")
+    
+    for Q_num in range(111, 116):
+        # Questions D3
+        score_erf, score_gauss, score_lorentz = score_code_D3(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T1_scores[(Q_num - 1)%5] += score_lorentz    
+    print("D3 complete")
+    
+    for Q_num in range(116, 121):
+        # Questions E1
+        score_erf, score_gauss, score_lorentz = score_code_E1(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T3_scores[(Q_num - 1)%5] += score_lorentz
+    print("E1 complete")
+    
+    for Q_num in range(121, 126):
+        # Questions E2
+        score_erf, score_gauss, score_lorentz = score_code_E2(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T3_scores[(Q_num - 1)%5] += score_lorentz
+    print("E2 complete")
+    
+    for Q_num in range(126, 131):
+        # Questions E3
+        score_erf, score_gauss, score_lorentz = score_code_E3(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T3_scores[(Q_num - 1)%5] += score_lorentz
+    print("E3 complete")
+    
+    for Q_num in range(131, 136):
+        # Questions E4
+        score_erf, score_gauss, score_lorentz = score_code_E4(size, Q_num)
+        all_scores_erf[int(Q_num - 1)] = score_erf; all_scores_gauss[int(Q_num - 1)] = score_gauss; all_scores_lorentz[int(Q_num - 1)] = score_lorentz
+        T3_scores[(Q_num - 1)%5] += score_lorentz
+    print("E4 complete")
+
+    results = np.concatenate((all_scores_erf, all_scores_gauss, all_scores_lorentz), axis = 0)
+    eval_name = "Evaluation/Code"
+
+    if size == 1:
+        write_to_text(str(results), eval_name, "_small")
+        resolution = r" (low res)"
+    elif size == 2:
+        write_to_text(str(results), eval_name, "_med")
+        resolution = r" (med res)"
+    else:
+        write_to_text(str(results), eval_name, "_large")
+        resolution = r" (high res)"
+    
+    question_names = [' ', ' ', r'Fermi Level (A1)', ' ', ' ']
+    question_names.extend([' ', ' ', r'Linear (B1)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Linear $v_F$ (B1)', '', ''])
+    question_names.extend([' ', ' ', r'Quadratic (B2)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Quadratic $v_F$ (B2)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Superstructure (B3)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Superstructure $v_F$ (B3)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Band bottom (B4)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Band bottom energy (B4)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Dirac cone energy (B5)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Superconducting gap size (B6)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Impurity scattering (C1)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Marginal Fermi liquid, MFL (C2)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Fermi liquid, FL (C3)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Phonon + MFL (C4)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Phonon + FL (C5)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Phonon, $\lambda = 0.5$ (D1)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Phonon, $\lambda = 0.75$ (D1)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Phonon, $\lambda = 1$ (D1)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Phonon, $\lambda = 2$ (D1)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Phonon, $\lambda = 5$ (D1)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Two phonons (D2)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Three phonons (D3)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Cuprate, single layer (E1)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Cuprate, bilayer (E2)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Sr$_2$RuO$_4$ (E3)', ' ', ' '])
+    question_names.extend([' ', ' ', r'Nickelate, trilayer (E4)', ' ', ' '])
+    
+    model = "Code"
+    model_name = "Code (human-written)"
+    model_resolution = model + resolution
+    question_numbers = np.arange(1, 136)
+
+    # ----------------------------------------------------------------- Plot main scores -----------------------------------------------------------------
+
+    fig = plt.figure('Parallel', figsize = (6, 8), dpi = 500)
+    plt.subplots_adjust(left = 0.3)
+
+    plt.plot(all_scores_lorentz[0:5], question_numbers[0:5], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[5:10], question_numbers[5:10], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[10:15], question_numbers[10:15], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[15:20], question_numbers[15:20], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[20:25], question_numbers[20:25], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[25:30], question_numbers[25:30], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[30:35], question_numbers[30:35], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[35:40], question_numbers[35:40], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[40:45], question_numbers[40:45], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[45:50], question_numbers[45:50], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[50:55], question_numbers[50:55], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[55:60], question_numbers[55:60], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[60:65], question_numbers[60:65], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[65:70], question_numbers[65:70], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[70:75], question_numbers[70:75], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[75:80], question_numbers[75:80], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[80:85], question_numbers[80:85], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[85:90], question_numbers[85:90], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[90:95], question_numbers[90:95], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[95:100], question_numbers[95:100], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[100:105], question_numbers[100:105], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[105:110], question_numbers[105:110], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[110:115], question_numbers[110:115], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[115:120], question_numbers[115:120], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[120:125], question_numbers[120:125], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[125:130], question_numbers[125:130], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(all_scores_lorentz[130:135], question_numbers[130:135], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+
+    plt.axhline(y = 5.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 10.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 15.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 20.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 25.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 30.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 35.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 40.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 45.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 50.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 55.5, color = 'b', ls = '--', lw = 0.3)
+    plt.axhline(y = 60.5, color = 'b', ls = '--', lw = 0.3)
+    plt.axhline(y = 65.5, color = 'b', ls = '--', lw = 0.3)
+    plt.axhline(y = 70.5, color = 'b', ls = '--', lw = 0.3)
+    plt.axhline(y = 75.5, color = 'b', ls = '--', lw = 0.3)
+    plt.axhline(y = 80.5, color = 'r', ls = '--', lw = 0.3)
+    plt.axhline(y = 85.5, color = 'r', ls = '--', lw = 0.3)
+    plt.axhline(y = 90.5, color = 'r', ls = '--', lw = 0.3)
+    plt.axhline(y = 95.5, color = 'r', ls = '--', lw = 0.3)
+    plt.axhline(y = 100.5, color = 'r', ls = '--', lw = 0.3)
+    plt.axhline(y = 105.5, color = 'r', ls = '--', lw = 0.3)
+    plt.axhline(y = 110.5, color = 'r', ls = '--', lw = 0.3)
+    plt.axhline(y = 115.5, color = 'm', ls = '--', lw = 0.3)
+    plt.axhline(y = 120.5, color = 'm', ls = '--', lw = 0.3)
+    plt.axhline(y = 125.5, color = 'm', ls = '--', lw = 0.3)
+    plt.axhline(y = 130.5, color = 'm', ls = '--', lw = 0.3)
+
+    plt.axvline(x = 0.2, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.4, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.6, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.8, color = 'k', ls = '--', lw = 0.3)
+    
+    plt.ylim(0.5, 135.5)
+    plt.xlim(0, 1)
+    plt.yticks(question_numbers, question_names)
+    plt.yticks(fontsize = 7)
+    plt.tick_params(axis = 'y', which = 'both', left = False, right = False, labelleft = False, labelright = True)
+    plt.ylabel(r'$\leftarrow$ Noise', fontsize = 14)
+    plt.xlabel(r'Score')
+    plt.title(model_name)
+
+    if size == 1:
+        full_path = f'/workspaces/physics-benchmark/client/Evaluation/' + model + '_small.png'
+    elif size == 2:
+        full_path = f'/workspaces/physics-benchmark/client/Evaluation/' + model + '_med.png'
+    else:
+        full_path = f'/workspaces/physics-benchmark/client/Evaluation/' + model + '_large.png'
+
+    #plt.legend(loc = 'upper right')
+    plt.gca().invert_yaxis()
+    plt.savefig(full_path, bbox_inches = 'tight')
+    plt.show()
+    plt.close(fig)
+
+    # ----------------------------------------------------------------- Plot tiered scores -----------------------------------------------------------------
+
+    T1_scores /= 11; T2_scores /= 9; T3_scores /= 7
+
+    tiers = [' ', ' ', r'Tier I', ' ', ' ']
+    tiers.extend([' ', ' ', r'Tier II', ' ', ' '])
+    tiers.extend([' ', ' ', r'Tier III', ' ', ' '])
+
+    fig = plt.figure('Parallel', figsize = (3, 4), dpi = 500)
+    plt.subplots_adjust(left = 0.3)
+
+    plt.plot(T1_scores, question_numbers[0:5], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(T2_scores, question_numbers[5:10], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+    plt.plot(T3_scores, question_numbers[10:15], marker = 'o', linestyle = '-', color = 'b', linewidth = 0.5, markersize = 1)
+
+    plt.axhline(y = 5.5, color = 'g', ls = '--', lw = 0.3)
+    plt.axhline(y = 10.5, color = 'g', ls = '--', lw = 0.3)
+    
+    plt.ylim(0.5, 15.5)
+    plt.xlim(0, 1)
+    plt.yticks(question_numbers[0:15], tiers)
+    plt.yticks(fontsize = 7)
+    plt.tick_params(axis = 'y', which = 'both', left = False, right = False)
+    plt.ylabel(r'$\leftarrow$ Noise')
+    plt.xlabel(r'Score')
+    plt.title(model_name)
+
+    if size == 1:
+        full_path = f'/workspaces/physics-benchmark/client/Evaluation/' + model + '_tiers_small.png'
+    elif size == 2:
+        full_path = f'/workspaces/physics-benchmark/client/Evaluation/' + model + '_tiers_med.png'
+    else:
+        full_path = f'/workspaces/physics-benchmark/client/Evaluation/' + model + '_tiers_large.png'
+
+    #plt.legend(loc = 'upper right')
+    plt.gca().invert_yaxis()
+    plt.axvline(x = 0.2, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.4, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.6, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.8, color = 'k', ls = '--', lw = 0.3)
+    plt.savefig(full_path, bbox_inches = 'tight')
+    plt.show()
+    plt.close(fig)
+
+    # ----------------------- Save tiered scores (.csv) -----------------------
+
+    data_concat = np.vstack((T1_scores, T2_scores, T3_scores)).T
+    header = ['Tier I', 'Tier II', 'Tier III']
+    file_csv = f'Evaluation/{model_resolution}_tiers.csv'
+    np.savetxt(file_csv, data_concat, delimiter = ',', fmt = "%s", header = ','.join(header), comments = '')
+
+    # ----------------------- Save scores (.csv) -----------------------
+
+    header = ['Score']
+    file_csv = f'Evaluation/{model_resolution}_scores.csv'
+    np.savetxt(file_csv, all_scores_lorentz, delimiter = ',', fmt = "%s", header = ','.join(header), comments = '')
+
+    return all_scores_lorentz
+
+
+
+
+
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------- Score batches of questions -------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2131,22 +3688,37 @@ def score_models():
     scores_noiseless_dict = {}
 
     # Low resolution
-    model_list_1 = ["deepseek-reasoner", "o1-mini", "o1-low", "o1-medium", "o3-mini-low", "o3-mini-medium", "o3-low", "o3-medium", "o4-mini-low", "o4-mini-medium", "claude-3-7-sonnet-20250219", "gemini-2_0-flash", "o1-high", "o3-high", "o3-mini-high", "o4-mini-high", "gemini-2_5-pro-preview-03-25", "o3-pro-2025-06-10", "kimi-k2", "glm-4_5", "qwen3-235b-thinking", "gpt-oss-20b", "gpt-oss-120b"]
-    model_name_1 = ["DeepSeek-R1 (*)", "o1-mini", "o1 (low)", "o1 (medium)", "o3-mini (low)", "o3-mini (medium)", "o3 (low)", "o3 (medium)", "o4-mini (low)", "o4-mini (medium)", "Claude 3.7 Sonnet", "Gemini 2.0 Flash", "o1 (high)", "o3 (high)", "o3-mini (high)", "o4-mini (high)", "Gemini 2.5 Pro Preview", "o3-pro", "Kimi K2 (*)", "GLM-4.5 (*)", "Qwen3 (*)", "gpt-oss-20b (*)", "gpt-oss-120b (*)"]
+    model_list_1 = ["code", "deepseek-reasoner", "o1-mini", "o1-low", "o1-medium", "o3-mini-low", "o3-mini-medium", "o3-low", "o3-medium", "o4-mini-low", "o4-mini-medium", "claude-3-7-sonnet-20250219", "gemini-2_0-flash", "o1-high", "o3-high", "o3-mini-high", "o4-mini-high", "gemini-2_5-pro-preview-03-25", "o3-pro-2025-06-10", "kimi-k2", "glm-4_5", "qwen3-235b-thinking", "gpt-oss-20b", "gpt-oss-120b"]
+    model_name_1 = ["Code (human-written)", "DeepSeek-R1 (*)", "o1-mini", "o1 (low)", "o1 (medium)", "o3-mini (low)", "o3-mini (medium)", "o3 (low)", "o3 (medium)", "o4-mini (low)", "o4-mini (medium)", "Claude 3.7 Sonnet", "Gemini 2.0 Flash", "o1 (high)", "o3 (high)", "o3-mini (high)", "o4-mini (high)", "Gemini 2.5 Pro Preview", "o3-pro", "Kimi K2 (*)", "GLM-4.5 (*)", "Qwen3 (*)", "gpt-oss-20b (*)", "gpt-oss-120b (*)"]
+    
     for model_num in range(len(model_list_1)):
         model = model_list_1[model_num]
         model_name = model_name_1[model_num]
-        all_scores_lorentz, all_std_lorentz, model_resolution, model_name = score_model_responses(model, 1, model_name)
-        all_scores_noiseless_lorentz = all_scores_lorentz[::5]
-        all_std_noiseless_lorentz = all_std_lorentz[::5]
+        if model == "code":
+            all_scores_lorentz = score_code_responses(1)
+            all_std_lorentz = np.zeros(135)
+            all_scores_noiseless_lorentz = all_scores_lorentz[::5]
+            all_std_noiseless_lorentz = all_std_lorentz[::5]
 
-        ave_scores_lorentz = np.sum(np.nan_to_num(all_scores_lorentz, nan = 0))/135
-        ave_scores_noiseless_lorentz = np.sum(np.nan_to_num(all_scores_noiseless_lorentz, nan = 0))/27
-        ave_std_lorentz = np.sum(np.nan_to_num(all_std_lorentz, nan = 0))/135
-        ave_std_noiseless_lorentz = np.sum(np.nan_to_num(all_std_noiseless_lorentz, nan = 0))/27
+            ave_scores_lorentz = np.sum(np.nan_to_num(all_scores_lorentz, nan = 0))/135
+            ave_scores_noiseless_lorentz = np.sum(np.nan_to_num(all_scores_noiseless_lorentz, nan = 0))/27
+            ave_std_lorentz = np.sum(np.nan_to_num(all_std_lorentz, nan = 0))/135
+            ave_std_noiseless_lorentz = np.sum(np.nan_to_num(all_std_noiseless_lorentz, nan = 0))/27
 
-        scores_dict.update({model_name: np.array([ave_scores_lorentz, ave_std_lorentz])})
-        scores_noiseless_dict.update({model_name: np.array([ave_scores_noiseless_lorentz, ave_std_noiseless_lorentz])})
+            scores_dict.update({model_name: np.array([ave_scores_lorentz, ave_std_lorentz])})
+            scores_noiseless_dict.update({model_name: np.array([ave_scores_noiseless_lorentz, ave_std_noiseless_lorentz])})
+        else:
+            all_scores_lorentz, all_std_lorentz, model_resolution, model_name = score_model_responses(model, 1, model_name)
+            all_scores_noiseless_lorentz = all_scores_lorentz[::5]
+            all_std_noiseless_lorentz = all_std_lorentz[::5]
+
+            ave_scores_lorentz = np.sum(np.nan_to_num(all_scores_lorentz, nan = 0))/135
+            ave_scores_noiseless_lorentz = np.sum(np.nan_to_num(all_scores_noiseless_lorentz, nan = 0))/27
+            ave_std_lorentz = np.sum(np.nan_to_num(all_std_lorentz, nan = 0))/135
+            ave_std_noiseless_lorentz = np.sum(np.nan_to_num(all_std_noiseless_lorentz, nan = 0))/27
+
+            scores_dict.update({model_name: np.array([ave_scores_lorentz, ave_std_lorentz])})
+            scores_noiseless_dict.update({model_name: np.array([ave_scores_noiseless_lorentz, ave_std_noiseless_lorentz])})
 
     # High resolution
     # model_list_3 = ["gemini-2_0-flash", "gemini-2_5-pro-preview-03-25"]
@@ -2227,19 +3799,27 @@ def score_models():
     noiseless_scores_2 = [arr[0] for arr in noiseless_list_results_2]
     noiseless_stds_2 = [arr[1] for arr in noiseless_list_results_2]
 
-    fig = plt.figure('Parallel', figsize = (6, 4.5), dpi = 500)
+    fig = plt.figure('Parallel', figsize = (8, 4.5), dpi = 500)
     plt.subplots_adjust(left = 0.3)
     plt.barh(noiseless_model_names_2, noiseless_scores_2, align = 'center', color = 'tab:blue', label = r'Noiseless')
     plt.barh(model_names, scores, align = 'center', color = 'tab:red', label = r'All spectra')
     plt.title('Leaderboard')
     plt.yticks(noiseless_model_names)
     plt.xlabel('Score')
-    plt.xlim(0, 0.2)
+    plt.xlim(0, 0.6)
     plt.xticks(fontsize = 10)
     plt.yticks(fontsize = 10)
-    plt.axvline(x = 0.05, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.05, color = 'k', ls = '--', lw = 0.1)
     plt.axvline(x = 0.1, color = 'k', ls = '--', lw = 0.3)
-    plt.axvline(x = 0.15, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.15, color = 'k', ls = '--', lw = 0.1)
+    plt.axvline(x = 0.2, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.25, color = 'k', ls = '--', lw = 0.1)
+    plt.axvline(x = 0.3, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.35, color = 'k', ls = '--', lw = 0.1)
+    plt.axvline(x = 0.4, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.45, color = 'k', ls = '--', lw = 0.1)
+    plt.axvline(x = 0.5, color = 'k', ls = '--', lw = 0.3)
+    plt.axvline(x = 0.55, color = 'k', ls = '--', lw = 0.1)
     #plt.axvline(x = 0.8, color = 'k', ls = '--', lw = 0.3)
     plt.legend(loc = 'lower right')
 
@@ -2285,7 +3865,7 @@ def plot_models():
     
     return
 
-#score_models()
+score_models()
 
 #plot_models()
 
@@ -2896,7 +4476,7 @@ def plot_noise_responses(model, resolution, noise_array, question_category):
     resolution = int(resolution)
 
     E_conv = 0.003; k_conv = 0.005; doping_sigma = 0.01
-    E_factor = 1; k_factor = 1; doping_factor = 1
+    E_factor = 1; k_factor = 1; doping_factor = 3
     E_conv *= E_factor; k_conv *= k_factor; doping_sigma *= doping_factor
 
     linear_band_params, k_int_range_linear = get_band_linear_params_d()
@@ -2936,9 +4516,9 @@ def plot_noise_responses(model, resolution, noise_array, question_category):
             response_name = response_prefix + model + "-B1_vF" + response_suffix + ".jsonl"
             file_name = "Evaluation_single/" + model + "-B1_vF" + response_suffix + ".png"
 
-            vF_sigma = vF_linear*np.sqrt(k_conv**2 + E_conv**2)
-            solution, responses = get_response_floats(solution_name, response_name)
             E_array_cut, k_array = get_spectrum_arrays(resolution)
+            vF_sigma = vF_linear*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array_cut) - np.min(E_array_cut))**2))
+            solution, responses = get_response_floats(solution_name, response_name)
             axis_label = r'Fermi velocity (eV$\cdot\AA$)'
             plot_histogram_general_single(responses, solution, vF_sigma, 6, axis_label, file_name)
         
@@ -2958,7 +4538,7 @@ def plot_noise_responses(model, resolution, noise_array, question_category):
             response_name = response_prefix + model + "-B2_vF" + response_suffix + ".jsonl"
             file_name = "Evaluation_single/" + model + "-B2_vF" + response_suffix + ".png"
 
-            vF_sigma = vF_quadratic*np.sqrt(k_conv**2 + E_conv**2)
+            vF_sigma = vF_quadratic*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array_cut) - np.min(E_array_cut))**2))
             solution, responses = get_response_floats(solution_name, response_name)
             E_array_cut, k_array = get_spectrum_arrays(resolution)
             plot_histogram_general_single(responses, solution, vF_sigma, 6, axis_label, file_name)
@@ -2979,7 +4559,7 @@ def plot_noise_responses(model, resolution, noise_array, question_category):
             response_name = response_prefix + model + "-B3_vF" + response_suffix + ".jsonl"
             file_name = "Evaluation_single/" + model + "-B3_vF" + response_suffix + ".png"
 
-            vF_sigma = vF_linear*np.sqrt(k_conv**2 + E_conv**2)
+            vF_sigma = vF_linear*np.sqrt((k_conv/(np.max(k_array) - np.min(k_array)))**2 + (E_conv/(np.max(E_array_cut) - np.min(E_array_cut))**2))
             solution, responses = get_response_floats(solution_name, response_name)
             E_array_cut, k_array = get_spectrum_arrays(resolution)
             plot_histogram_general_single(responses, solution, vF_sigma, 6, axis_label, file_name)

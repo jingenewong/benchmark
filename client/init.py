@@ -5,6 +5,7 @@ import math
 import tiktoken
 import re
 import string
+from scipy.optimize import leastsq
 
 import matplotlib
 matplotlib.use('Agg')
@@ -653,6 +654,11 @@ def array2string(array):
 
 
 
+def array2string2(array):
+    return '\t'.join(map(str, array))
+
+
+
 def cut_spectrum(E_array, spectrum_raw, mu):
     index = next(x for x, val in enumerate(E_array)
         if val > mu)
@@ -682,6 +688,27 @@ def spectrum_dynamic_range(spectrum, dynamic_range):
     spectrum_integer = np.round(spectrum_rescaled).astype(int)
     spectrum_trunc = [[int(str(x).split('.')[0]) for x in row] for row in spectrum_integer]
     return spectrum_trunc
+
+
+
+def convert_literal_to_txt_3dp(spectrum):
+    txt = array2string(np.round(spectrum, decimals = 3))
+    txt_stripped = re.sub(r"\.0\b", "", txt)
+    return txt_stripped
+
+
+
+def convert_array_to_txt_3dp(array):
+    txt = array2string2(np.round(array, decimals = 3))
+    txt_stripped = re.sub(r"\.0\b", "", txt)
+    return txt_stripped
+
+
+
+def convert_array_to_txt_4dp(array):
+    txt = array2string2(np.round(array, decimals = 4))
+    txt_stripped = re.sub(r"\.0\b", "", txt)
+    return txt_stripped
 
 
 
@@ -1563,6 +1590,18 @@ def spectrum_FD(spectrum_params, smooth_params, noise_params, dynamic_range, plo
     plot_spectrum(k_array, E_array, spectrum_rescaled, full_name)
     write_to_text(txt, full_name, "_data")
 
+    if plot_name == "Plots/A1/A1d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_A1 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/A1" + append_parameters_A1
+    
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
+
     return mu, E_conv, txt
 
 
@@ -1608,6 +1647,30 @@ def spectrum_FL_linear(spectrum_params, smooth_params, noise_params, linear_band
     plot_spectrum(k_array, E_array_cut, spectrum_rescaled, full_name)
     plot_spectrum_fwhm_both(k_array, E_array_cut, k_band_cut, k_hwhm_left_cut, k_hwhm_right_cut, disp_array_cut, gamma_array_cut, spectrum_rescaled, full_name + "_trace")
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/B1/B1d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+        
+        append_parameters_B1 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/B1" + append_parameters_B1
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
+
+    if plot_name == "Plots/C3/C3d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_C3 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/C3" + append_parameters_C3
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
 
     return E_array_cut, disp_array_cut, gamma_array_cut, txt
 
@@ -1658,6 +1721,18 @@ def spectrum_FL_quadratic(spectrum_params, smooth_params, noise_params, quadrati
     plot_spectrum(k_array, E_array_cut, spectrum_rescaled, full_name)
     plot_spectrum_fwhm_both(k_array, E_array_cut, k_band_cut, k_hwhm_left_cut, k_hwhm_right_cut, disp_array_cut, gamma_array_cut, spectrum_rescaled, full_name + "_trace")
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/B2/B2d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_B2 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/B2" + append_parameters_B2
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
 
     return E_array_cut, disp_array_cut, txt
 
@@ -1716,6 +1791,18 @@ def spectrum_FL_superstructure_linear(spectrum_params, smooth_params, noise_para
     plot_spectrum_fwhm_both(k_array, E_array_cut, k_band_cut, k_hwhm_left_cut, k_hwhm_right_cut, disp_array_cut, gamma_array_cut, spectrum_rescaled, full_name + "_trace")
     write_to_text(txt, full_name, "_data")
 
+    if plot_name == "Plots/B3/B3d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_B3 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/B3" + append_parameters_B3
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
+
     return E_array_cut, disp_array_cut, txt
 
 
@@ -1756,6 +1843,18 @@ def spectrum_FL_band_bottom(spectrum_params, smooth_params, noise_params, band_b
     plot_spectrum(k_array, E_array_cut, spectrum_rescaled, full_name)
     plot_spectrum_trace_k(k_array, E_array_cut, Ek_array_cut, spectrum_rescaled, full_name + "_trace")
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/B4/B4d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_B4 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/B4" + append_parameters_B4
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
 
     return k_array, Ek_array_cut, txt
 
@@ -1800,6 +1899,18 @@ def spectrum_FL_Dirac(spectrum_params, smooth_params, noise_params, Dirac_cone_p
     plot_spectrum(k_array, E_array_cut, spectrum_rescaled, full_name)
     plot_spectrum_trace_E_2(k_array, E_array_cut, disp_array_cut_1, disp_array_cut_2, spectrum_rescaled, full_name + "_trace")
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/B5/B5d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_B5 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/B5" + append_parameters_B5
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
 
     return E0, txt
 
@@ -1846,6 +1957,18 @@ def spectrum_MFL_linear(spectrum_params, smooth_params, noise_params, linear_ban
     plot_spectrum(k_array, E_array_cut, spectrum_rescaled, full_name)
     plot_spectrum_fwhm_both(k_array, E_array_cut, k_band_cut, k_hwhm_left_cut, k_hwhm_right_cut, disp_array_cut, gamma_array_cut, spectrum_rescaled, full_name + "_trace")
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/C2/C2d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_C2 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/C2" + append_parameters_C2
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
 
     return E_array_cut, disp_array_cut, gamma_array_cut, txt
 
@@ -1998,6 +2121,18 @@ def spectrum_SC_2_band_bottoms(spectrum_params, smooth_params, noise_params, ban
     plot_spectrum_trace_gap(k_array, E_array, Delta_a, spectrum_rescaled, full_name + "_trace")
     write_to_text(txt, full_name, "_data")
 
+    if plot_name == "Plots/B6/B6d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_B6 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/B6" + append_parameters_B6
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
+
     return Delta_a, txt
 
 
@@ -2044,6 +2179,18 @@ def spectrum_imp_linear(spectrum_params, smooth_params, noise_params, linear_ban
     plot_spectrum(k_array, E_array_cut, spectrum_rescaled, full_name)
     plot_spectrum_fwhm_both(k_array, E_array_cut, k_band_cut, k_hwhm_left_cut, k_hwhm_right_cut, disp_array_cut, gamma_array_cut, spectrum_rescaled, full_name + "_trace")
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/C1/C1d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_C1 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/C1" + append_parameters_C1
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
 
     return E_array_cut, disp_array_cut, gamma_array_cut, txt
 
@@ -2099,6 +2246,30 @@ def spectrum_phonon_1_FL(spectrum_params, smooth_params, noise_params, linear_ba
     plot_sigma_1_phonon(E_array_cut, disp_array_cut, k_phonon_cut, k_hwhm_left_cut, k_hwhm_right_cut, ReS_array_cut, ImS_array_cut, mu, E_conv, freq, full_name)
     write_to_text(txt, full_name, "_data")
 
+    if plot_name == "Plots/C4/C4d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_C4 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/C4" + append_parameters_C4
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
+
+    if plot_name == "Plots/D1/D1d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_D1 = f"_r{resolution}_n{noise_int}_l{s}"
+        spectrum_name = "Spectra/D1" + append_parameters_D1
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
+
     return E_array_cut, mu - freq, disp_array_cut, k_phonon_cut, ReS_array_cut, ImS_array_cut, txt
 
 
@@ -2153,6 +2324,18 @@ def spectrum_phonon_1_MFL(spectrum_params, smooth_params, noise_params, linear_b
     plot_sigma_1_phonon(E_array_cut, disp_array_cut, k_phonon_cut, k_hwhm_left_cut, k_hwhm_right_cut, ReS_array_cut, ImS_array_cut, mu, E_conv, freq, full_name)
     write_to_text(txt, full_name, "_data")
 
+    if plot_name == "Plots/C5/C5d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_C5 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/C5" + append_parameters_C5
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
+
     return E_array_cut, mu - freq, disp_array_cut, k_phonon_cut, ReS_array_cut, ImS_array_cut, txt
 
 
@@ -2204,6 +2387,18 @@ def spectrum_phonon_2_FL(spectrum_params, smooth_params, noise_params, linear_ba
     plot_spectrum_2_phonons(k_array, E_array_cut, k_phonon_cut, disp_array_cut, k_hwhm_left_cut, k_hwhm_right_cut, mu - freq_1, mu - freq_2, spectrum_rescaled, full_name + "_trace")
     plot_sigma_2_phonons(E_array_cut, disp_array_cut, k_phonon_cut, k_hwhm_left_cut, k_hwhm_right_cut, ReS_array_cut, ImS_array_cut, mu, E_conv, freq_1, freq_2, full_name)
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/D2/D2d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_D2 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/D2" + append_parameters_D2
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
 
     return E_array_cut, mu - freq_1, mu - freq_2, disp_array_cut, k_phonon_cut, ReS_array_cut, ImS_array_cut, txt
 
@@ -2258,6 +2453,18 @@ def spectrum_phonon_3_FL(spectrum_params, smooth_params, noise_params, linear_ba
     plot_sigma_3_phonons(E_array_cut, disp_array_cut, k_phonon_cut, k_hwhm_left_cut, k_hwhm_right_cut, ReS_array_cut, ImS_array_cut, mu, E_conv, freq_1, freq_2, freq_3, full_name)
     write_to_text(txt, full_name, "_data")
 
+    if plot_name == "Plots/D3/D3d":
+        txt_sp = convert_literal_to_txt_3dp(spectrum_rescaled)
+        txt_E = convert_array_to_txt_3dp(E_array_cut)
+        txt_k = convert_array_to_txt_4dp(k_array)
+
+        append_parameters_D3 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/D3" + append_parameters_D3
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_E, spectrum_name, "_E")
+        write_to_text(txt_k, spectrum_name, "_k")
+
     return E_array_cut, mu - freq_1, mu - freq_2, mu - freq_3, disp_array_cut, k_phonon_cut, ReS_array_cut, ImS_array_cut, txt
 
 
@@ -2286,6 +2493,18 @@ def map_cuprate_monolayer_band(map_params, E_params, noise_params, k_conv, coefs
     plot_map_trace(kx_array, ky_array, kx_trace, ky_trace, map_rescaled, full_name + "_trace")
     plot_map(kx_array, ky_array, map_rescaled, full_name)
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/E1/E1d":
+        txt_sp = convert_literal_to_txt_3dp(map_rescaled)
+        txt_kx = convert_array_to_txt_4dp(kx_array)
+        txt_ky = convert_array_to_txt_4dp(ky_array)
+
+        append_parameters_E1 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/E1" + append_parameters_E1
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_kx, spectrum_name, "_kx")
+        write_to_text(txt_ky, spectrum_name, "_ky")
 
     return doping, txt
 
@@ -2319,6 +2538,18 @@ def map_cuprate_bilayer_bands(map_params, E_params, noise_params, k_conv, coefs_
     plot_map_trace(kx_array, ky_array, kx_trace, ky_trace, map_rescaled, full_name + "_trace")
     plot_map(kx_array, ky_array, map_rescaled, full_name)
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/E2/E2b":
+        txt_sp = convert_literal_to_txt_3dp(map_rescaled)
+        txt_kx = convert_array_to_txt_4dp(kx_array)
+        txt_ky = convert_array_to_txt_4dp(ky_array)
+
+        append_parameters_E2 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/E2" + append_parameters_E2
+        
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_kx, spectrum_name, "_kx")
+        write_to_text(txt_ky, spectrum_name, "_ky")
 
     return doping_1, doping_2, txt
 
@@ -2354,6 +2585,18 @@ def map_SRO_bands(map_params, E_params, noise_params, k_conv, coefs_1, coefs_2, 
     plot_map(kx_array, ky_array, map_rescaled, full_name)
     write_to_text(txt, full_name, "_data")
 
+    if plot_name == "Plots/E3/E3b":
+        txt_sp = convert_literal_to_txt_3dp(map_rescaled)
+        txt_kx = convert_array_to_txt_4dp(kx_array)
+        txt_ky = convert_array_to_txt_4dp(ky_array)
+
+        append_parameters_E3 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/E3" + append_parameters_E3
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_kx, spectrum_name, "_kx")
+        write_to_text(txt_ky, spectrum_name, "_ky")
+
     return doping_1, doping_2, doping_3, txt
 
 
@@ -2387,6 +2630,18 @@ def map_nickelate_trilayer_bands(map_params, E_params, noise_params, k_conv, coe
     plot_map_trace(kx_array, ky_array, kx_trace, ky_trace, map_rescaled, full_name + "_trace")
     plot_map(kx_array, ky_array, map_rescaled, full_name)
     write_to_text(txt, full_name, "_data")
+
+    if plot_name == "Plots/E4/E4b":
+        txt_sp = convert_literal_to_txt_3dp(map_rescaled)
+        txt_kx = convert_array_to_txt_4dp(kx_array)
+        txt_ky = convert_array_to_txt_4dp(ky_array)
+
+        append_parameters_E4 = f"_r{resolution}_n{noise_int}"
+        spectrum_name = "Spectra/E4" + append_parameters_E4
+
+        write_to_text(txt_sp, spectrum_name, "_sp")
+        write_to_text(txt_kx, spectrum_name, "_kx")
+        write_to_text(txt_ky, spectrum_name, "_ky")
 
     return doping_1, doping_2, doping_3, txt
 
@@ -3236,9 +3491,9 @@ def ask_B3_vF(resolution, size, noise_ratio):
     write_to_text(question, full_name, "_Q")
 
     if size == 0:
-        write_to_text(str(disp_array_cut_d), full_name, "_S")
+        write_to_text(str(vF_d), full_name, "_S")
     else:
-        write_to_text(str(disp_array_cut_d), question_name, "_S")
+        write_to_text(str(vF_d), question_name, "_S")
 
     return question, num
 
@@ -4711,5 +4966,417 @@ def ask_E4(resolution, size, noise_ratio):
 
     return question, num
 
+
+
+
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------- Solve examples by handwritten code ----------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+def func_FD(E, mu, T, bkg, a):
+    return bkg + a/(1 + np.exp((E - mu)/(kB*T)))
+
+def res_FD(params, E_array, a_data):
+    mu = params[0]; T = params[1]; bkg = params[2]; a = params[3]
+    diff = [func_FD(E, mu, T, bkg, a) - y for E, y in zip(E_array, a_data)]
+    return diff
+
+def fit_FD(E_array, k_array, spectrum):
+    a_data = np.mean(spectrum, axis = 1) # Sum second axis (energy)
+    start_params = np.array([np.mean(E_array), 10, 10, 1000])
+    popt, ier = leastsq(res_FD, start_params, args = (E_array, a_data))
+    EF = popt[0]
+    return EF
+
+
+
+def func_L_pure(x, x0, a, gamma):
+    # Excludes background
+    return (a * gamma**2)/(gamma**2 + (x - x0)**2)
+
+def func_L(x, x0, a, gamma, bkg):
+    return bkg + (a * gamma**2)/(gamma**2 + (x - x0)**2)
+
+def res_L1(params, x_data, a_data):
+    x0 = params[0]; a = params[1]; gamma = params[2]; bkg = params[3]
+    diff = [func_L(x, x0, a, gamma, bkg) - y for x, y in zip(x_data, a_data)]
+    return diff
+
+def fit_L1(E_array, k_array, spectrum, gamma_ratio_guess):
+
+    E_len = int(len(E_array))
+    disp = np.zeros(E_len); gamma_array = np.zeros(E_len)
+
+    for E_index in range(E_len):
+        E = E_array[E_index]
+        MDC = spectrum[E_index,:]
+        start_params = np.array([k_array[int(np.argmax(MDC))], 100, gamma_ratio_guess*(np.max(k_array) - np.min(k_array)), 10])
+        popt, ier = leastsq(res_L1, start_params, args = (k_array, MDC))
+        disp[E_index] = popt[0]; gamma_array[E_index] = np.abs(popt[2])
+    
+    return disp, gamma_array
+
+
+
+def fit_L1_EDC(E_array, k_array, spectrum, gamma_ratio_guess):
+
+    k_len = int(len(k_array))
+    disp = np.zeros(k_len); gamma_array = np.zeros(k_len)
+
+    for k_index in range(k_len):
+        k = k_array[k_index]
+        EDC = spectrum[:,k_index]
+        start_params = np.array([E_array[int(np.argmax(EDC))], 100, gamma_ratio_guess*(np.max(E_array) - np.min(E_array)), 10])
+        popt, ier = leastsq(res_L1, start_params, args = (E_array, EDC))
+        disp[k_index] = popt[0]; gamma_array[k_index] = np.abs(popt[2])
+    
+    return disp, gamma_array
+
+
+
+def func_Ln(x, params):
+    off = params[0]
+    params_left = params[1:]
+    assert not (len(params_left)%3)
+    return off + sum([func_L_pure(x, *params_left[i : i + 3] ) for i in range(0, len(params_left), 3)])
+
+def res_Ln(params, xData, yData):
+    diff = [func_Ln(x, params) - y for x, y in zip(xData, yData) ]
+    return diff
+
+def fit_Ln(E_array, k_array, spectrum, gamma_ratio_guess, E_pnts):
+
+    E_len = int(len(E_array))
+    disp = np.zeros(E_pnts); gamma = np.zeros(E_pnts)
+
+    for E_index in range(E_len - E_pnts, E_len):
+        # Fit only last energy values close to Fermi level
+        E = E_array[E_index]
+        MDC = spectrum[E_index,:]
+
+        MDCLoc = MDC
+        startValues = [0]
+        counter = 0
+
+        while (max(MDCLoc) - min(MDCLoc))/max(MDCLoc) > 0.01:
+            counter += 1
+            if counter > 7:
+                break
+            minY = MDC[np.argmin(MDCLoc)]
+            x0 = k_array[int(np.argmax(MDC))]
+            startValues += [x0, minY - max(MDCLoc), gamma_ratio_guess]
+            popt, ier = leastsq(res_Ln, startValues, args = (k_array, MDC))
+            MDCLoc = [y - func_Ln(x, popt) for x, y in zip(k_array, MDC)]
+        
+        output = popt[1:]
+        a_list = output[1::3]; a_max = int(np.argmax(a_list)); x0 = output[a_max*3]
+        disp[E_index - (E_len - E_pnts)] = popt[0]
+        #print("x0 =", x0)
+    
+    coefficients = np.polyfit(E_array[-E_pnts:], disp, 1)
+    poly = np.poly1d(coefficients)
+    disp_fit = poly(E_array)
+
+    return disp_fit
+
+def fit_L1_restrained(E_array, k_array, spectrum, gamma_ratio_guess, E_pnts):
+
+    E_len = int(len(E_array)); k_len = int(len(k_array))
+    disp = np.zeros(E_pnts)
+
+    for E_index in range(E_len - E_pnts, E_len):
+        E = E_array[E_index]
+        MDC = spectrum[E_index,:]
+        k_index = int(np.argmax(MDC))
+        dk = k_array[-1] - k_array[-2]
+        k_span = round(2*gamma_ratio_guess/dk)
+        k_start = max(0, k_index - k_span); k_end = min(k_index + k_span, k_len)
+        start_params = np.array([k_array[k_index], 100, gamma_ratio_guess, 10])
+        popt, ier = leastsq(res_L1, start_params, args = (k_array[k_start:k_end], MDC[k_start:k_end]))
+        disp[E_index - (E_len - E_pnts)] = popt[0]
+    
+    coefficients = np.polyfit(E_array[-E_pnts:], disp, 1)
+    poly = np.poly1d(coefficients)
+    disp_fit = poly(E_array)
+    
+    return disp_fit
+
+
+
+def find_vF(disp, E_array, fit_power, E_min):
+
+    # Fit only data above E_min close to the Fermi level
+    index = int(np.argmin(np.abs(E_array - E_min)))
+    coefficients = np.polyfit(E_array[index:], disp[index:], fit_power)
+    poly = np.poly1d(coefficients)
+    gradient = poly.deriv()
+    vF = 1/(gradient(E_array[index:])[-1])
+    return vF
+
+
+
+def find_bbE(disp, k_array, E_array, k_min, k_max):
+
+    k_min_index = int(np.argmin(np.abs(k_array - k_min))); k_max_index = int(np.argmin(np.abs(k_array - k_max)))
+    coefficients = np.polyfit(k_array[k_min_index:k_max_index], disp[k_min_index:k_max_index], 2)
+    poly = np.poly1d(coefficients)
+    disp_fit = poly(k_array)
+    bbE = np.min(disp_fit)
+    return bbE
+
+
+
+def find_Dirac(E_array, k_array, spectrum, E_min, E_max, gamma_ratio_guess):
+    # Within energy range, ascribe MDC with sharpest linewidth to Dirac cone energy
+
+    E_min_index = int(np.argmin(np.abs(E_array - E_min))); E_max_index = int(np.argmin(np.abs(E_array - E_max)))
+    E_len = E_max_index - E_min_index + 1
+    a_array = np.zeros(E_len)
+
+    for E_index in range(E_len):
+        E = E_array[E_index + E_min_index]
+        MDC = spectrum[E_index + E_min_index,:]
+        start_params = np.array([k_array[int(np.argmax(MDC))], 100, gamma_ratio_guess*(np.max(k_array) - np.min(k_array)), 10])
+        popt, ier = leastsq(res_L1, start_params, args = (k_array, MDC))
+        a_array[E_index] = popt[0]
+    
+    index = int(np.argmax(a_array))
+    Dirac_E = E_array[index + E_min_index]
+    
+    return Dirac_E
+
+
+
+def func_L2_symm(x, x0, a, gamma, x0_2, a_2, gamma_2, bkg, T):
+    return bkg + ((a * gamma**2)/(gamma**2 + (x - x0)**2) + (a_2 * gamma_2**2)/(gamma_2**2 + (x - x0_2)**2))/(1 + np.exp(-x/(kB*T))) + ((a * gamma**2)/(gamma**2 + (x + x0)**2) + (a_2 * gamma_2**2)/(gamma_2**2 + (x + x0_2)**2))/(1 + np.exp(x/(kB*T)))
+
+def res_L2_symm(params, x_data, a_data):
+    x0 = params[0]; a = params[1]; gamma = params[2]; x0_2 = params[3]; a_2 = params[4]; gamma_2 = params[5]; bkg = params[6]; T = params[7]
+    diff = [func_L2_symm(x, x0, a, gamma, x0_2, a_2, gamma_2, bkg, T) - y for x, y in zip(x_data, a_data)]
+    return diff
+
+def find_SC_gap(E_array, k_array, spectrum, k_min, k_max):
+    # Fit Fermi level MDC with four Lorentzians and choose a peak position as kF to fit EDC
+
+    k_min_index = int(np.argmin(np.abs(k_array - k_min))); k_max_index = int(np.argmin(np.abs(k_array - k_max)))
+    k_len = k_max_index - k_min_index + 1
+    disp = np.zeros(k_len)
+
+    for k_index in range(k_len):
+        k = k_array[k_index + k_min_index]
+        EDC = spectrum[:, k_index + k_min_index]
+        start_params = np.array([E_array[round(len(EDC)/2)], 50, 0.005, E_array[round(2 + 3*len(EDC)/4)], 50, 0.01, 10, 20])
+        popt, ier = leastsq(res_L2_symm, start_params, args = (E_array, EDC))
+        #print(np.abs(popt[0]), np.abs(popt[3]))
+        disp[k_index] = min(np.abs(popt[0]), np.abs(popt[3]))
+    
+    SC_gap = np.min(np.abs(disp))
+    return SC_gap
+
+
+
+def find_1_phonon(ImS, E_array, E_min, E_max):
+    deriv = np.abs(np.gradient(ImS))
+
+    E_min_index = int(np.argmin(np.abs(E_array - E_min))); E_max_index = int(np.argmin(np.abs(E_array - E_max)))
+    deriv_cut = deriv[E_min_index:E_max_index + 1]
+    E_ph_index = np.argmax(deriv_cut)
+    E_ph = (E_array[E_min_index + E_ph_index] + E_array[E_min_index + E_ph_index + 1])/2
+
+    return E_ph
+
+
+
+def find_2_phonons(ImS, E_array, E_min_1, E_max_1, E_min_2, E_max_2):
+    deriv = np.abs(np.gradient(ImS))
+
+    E_min_index_1 = int(np.argmin(np.abs(E_array - E_min_1))); E_max_index_1 = int(np.argmin(np.abs(E_array - E_max_1)))
+    deriv_cut_1 = deriv[E_min_index_1:E_max_index_1 + 1]
+    E_ph_index_1 = np.argmax(deriv_cut_1)
+    E_ph_1 = (E_array[E_min_index_1 + E_ph_index_1] + E_array[E_min_index_1 + E_ph_index_1 + 1])/2
+
+    E_min_index_2 = int(np.argmin(np.abs(E_array - E_min_2))); E_max_index_2 = int(np.argmin(np.abs(E_array - E_max_2)))
+    deriv_cut_2 = deriv[E_min_index_2:E_max_index_2 + 1]
+    E_ph_index_2 = np.argmax(deriv_cut_2)
+    E_ph_2 = (E_array[E_min_index_2 + E_ph_index_2] + E_array[E_min_index_2 + E_ph_index_2 + 1])/2
+
+    E_ph = np.array([E_ph_1, E_ph_2])
+    return E_ph   # Array of two energies
+
+
+
+def find_3_phonons(ImS, E_array, E_min_1, E_max_1, E_min_2, E_max_2, E_min_3, E_max_3):
+    deriv = np.abs(np.gradient(ImS))
+
+    E_min_index_1 = int(np.argmin(np.abs(E_array - E_min_1))); E_max_index_1 = int(np.argmin(np.abs(E_array - E_max_1)))
+    deriv_cut_1 = deriv[E_min_index_1:E_max_index_1 + 1]
+    E_ph_index_1 = np.argmax(deriv_cut_1)
+    E_ph_1 = (E_array[E_min_index_1 + E_ph_index_1] + E_array[E_min_index_1 + E_ph_index_1 + 1])/2
+
+    E_min_index_2 = int(np.argmin(np.abs(E_array - E_min_2))); E_max_index_2 = int(np.argmin(np.abs(E_array - E_max_2)))
+    deriv_cut_2 = deriv[E_min_index_2:E_max_index_2 + 1]
+    E_ph_index_2 = np.argmax(deriv_cut_2)
+    E_ph_2 = (E_array[E_min_index_2 + E_ph_index_2] + E_array[E_min_index_2 + E_ph_index_2 + 1])/2
+
+    E_min_index_3 = int(np.argmin(np.abs(E_array - E_min_3))); E_max_index_3 = int(np.argmin(np.abs(E_array - E_max_3)))
+    deriv_cut_3 = deriv[E_min_index_3:E_max_index_3 + 1]
+    E_ph_index_3 = np.argmax(deriv_cut_3)
+    E_ph_3 = (E_array[E_min_index_3 + E_ph_index_3] + E_array[E_min_index_3 + E_ph_index_3 + 1])/2
+
+    E_ph = np.array([E_ph_1, E_ph_2, E_ph_3])
+    return E_ph   # Array of three energies
+
+
+
+def fit_L1_FS(ky_array, slice, gamma_ratio_guess):
+
+    start_params = np.array([ky_array[int(np.argmax(slice))], 100, gamma_ratio_guess, 10])
+    popt, ier = leastsq(res_L1, start_params, args = (ky_array, slice))
+    disp = popt[0]; a = np.abs(popt[1]); gamma = np.abs(popt[2])
+
+    if not (0 <= disp <= 1):
+        disp = 0
+    if a < 100:
+        disp = 0
+    if gamma > 0.1:
+        disp = 0
+    return disp
+
+def find_doping_1(kx_array, ky_array, spectrum):
+
+    k_length = int(len(kx_array))
+    k_min = int(round(k_length/2)); k_max = k_length; k_num = k_max - k_min + 1
+    kx_cut = kx_array[k_min:]; ky_cut = ky_array[k_min:]
+    spectrum_cut = spectrum[k_min:, k_min:]
+    disp = np.zeros(k_num)
+
+    for kx_index in range(k_num - 1):
+        kx = kx_cut[kx_index]
+        slice = spectrum_cut[:, kx_index]
+        disp[kx_index] = fit_L1_FS(ky_cut, slice, 0.05)
+    
+    doping = 1 - 2*np.sum(disp)/k_num
+    return doping
+
+
+
+def func_L2(x, x0, a, gamma, x0_2, a_2, gamma_2, bkg):
+    return bkg + (a * gamma**2)/(gamma**2 + (x - x0)**2) + (a_2 * gamma_2**2)/(gamma_2**2 + (x - x0_2)**2)
+
+def res_L2(params, x_data, a_data):
+    x0 = params[0]; a = params[1]; gamma = params[2]; x0_2 = params[3]; a_2 = params[4]; gamma_2 = params[5]; bkg = params[6]
+    diff = [func_L2(x, x0, a, gamma, x0_2, a_2, gamma_2, bkg) - y for x, y in zip(x_data, a_data)]
+    return diff
+
+def fit_L2_FS(kx, ky_array, slice, gamma_ratio_guess):
+
+    start_params = np.array([0.2, 100, gamma_ratio_guess, 0.8, 100, gamma_ratio_guess, 10])
+    popt, ier = leastsq(res_L2, start_params, args = (ky_array, slice))
+    disp = popt[0]; a = np.abs(popt[1]); gamma = np.abs(popt[2]); disp_2 = popt[3]; a_2 = np.abs(popt[4]); gamma_2 = np.abs(popt[5])
+
+    crossover_kx = 0.7
+
+    if not (0 <= disp <= 1):
+        if kx < crossover_kx:
+            disp = 1
+        else:
+            disp = 0
+    
+    if not (0 <= disp_2 <= 1):
+        if kx < crossover_kx:
+            disp_2 = 1
+        else:
+            disp_2 = 0
+    
+    return disp, disp_2
+
+def find_dopings_2(kx_array, ky_array, spectrum):
+
+    k_length = int(len(kx_array))
+    k_min = int(round(k_length/2)); k_max = k_length; k_num = k_max - k_min + 1
+    kx_cut = kx_array[k_min:]; ky_cut = ky_array[k_min:]
+    spectrum_cut = spectrum[k_min:, k_min:]
+    disp_1 = np.zeros(k_num); disp_2 = np.zeros(k_num)
+
+    for kx_index in range(k_num - 1):
+        kx = kx_cut[kx_index]
+        slice = spectrum_cut[:, kx_index]
+        disp_val_1, disp_val_2 = fit_L2_FS(kx, ky_cut, slice, 0.2)
+        disp_collected = np.array([disp_val_1, disp_val_2])
+        disp_sorted = np.sort(disp_collected)
+        disp_1[kx_index] = disp_sorted[0]
+        disp_2[kx_index] = disp_sorted[1]
+    
+    doping_1 = 1 - 2*np.sum(disp_1)/k_num
+    doping_2 = 1 - 2*np.sum(disp_2)/k_num
+    dopings = np.array([doping_1, doping_2])
+
+    return dopings   # Array of two dopings
+
+
+
+def func_L3(x, x0, a, gamma, x0_2, a_2, gamma_2, x0_3, a_3, gamma_3, bkg):
+    return bkg + (a * gamma**2)/(gamma**2 + (x - x0)**2) + (a_2 * gamma_2**2)/(gamma_2**2 + (x - x0_2)**2) + (a_3 * gamma_3**2)/(gamma_3**2 + (x - x0_3)**2)
+
+def res_L3(params, x_data, a_data):
+    x0 = params[0]; a = params[1]; gamma = params[2]; x0_2 = params[3]; a_2 = params[4]; gamma_2 = params[5]; x0_3 = params[6]; a_3 = params[7]; gamma_3 = params[8]; bkg = params[9]
+    diff = [func_L3(x, x0, a, gamma, x0_2, a_2, gamma_2, x0_3, a_3, gamma_3, bkg) - y for x, y in zip(x_data, a_data)]
+    return diff
+
+def fit_L3_FS(kx, ky_array, slice, gamma_ratio_guess):
+
+    start_params = np.array([0.2, 100, gamma_ratio_guess, 0.5, 100, gamma_ratio_guess, 0.8, 100, gamma_ratio_guess, 10])
+    popt, ier = leastsq(res_L3, start_params, args = (ky_array, slice))
+    disp = popt[0]; a = np.abs(popt[1]); gamma = np.abs(popt[2]); disp_2 = popt[3]; a_2 = np.abs(popt[4]); gamma_2 = np.abs(popt[5]); disp_3 = popt[6]; a_3 = np.abs(popt[7]); gamma_3 = np.abs(popt[8])
+
+    crossover_kx = 0.7
+
+    if not (0 <= disp <= 1):
+        if kx < crossover_kx:
+            disp = 1
+        else:
+            disp = 0
+    
+    if not (0 <= disp_2 <= 1):
+        if kx < crossover_kx:
+            disp_2 = 1
+        else:
+            disp_2 = 0
+    
+    if not (0 <= disp_3 <= 1):
+        if kx < crossover_kx:
+            disp_3 = 1
+        else:
+            disp_3 = 0
+    
+    return disp, disp_2, disp_3
+
+def find_dopings_3(kx_array, ky_array, spectrum):
+
+    k_length = int(len(kx_array))
+    k_min = int(round(k_length/2)); k_max = k_length; k_num = k_max - k_min + 1
+    kx_cut = kx_array[k_min:]; ky_cut = ky_array[k_min:]
+    spectrum_cut = spectrum[k_min:, k_min:]
+    disp_1 = np.zeros(k_num); disp_2 = np.zeros(k_num); disp_3 = np.zeros(k_num)
+
+    for kx_index in range(k_num - 1):
+        kx = kx_cut[kx_index]
+        slice = spectrum_cut[:, kx_index]
+        disp_val_1, disp_val_2, disp_val_3 = fit_L3_FS(kx, ky_cut, slice, 0.2)
+        disp_collected = np.array([disp_val_1, disp_val_2, disp_val_3])
+        disp_sorted = np.sort(disp_collected)
+        disp_1[kx_index] = disp_sorted[0]
+        disp_2[kx_index] = disp_sorted[1]
+        disp_3[kx_index] = disp_sorted[2]
+    
+    doping_1 = 1 - 2*np.sum(disp_1)/k_num
+    doping_2 = 1 - 2*np.sum(disp_2)/k_num
+    doping_3 = 1 - 2*np.sum(disp_3)/k_num
+    dopings = np.array([doping_1, doping_2, doping_3])
+
+    return dopings   # Array of three dopings
 
 
